@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SYNTHWAVE // Procedural Audio Engine</title>
+  <style>
+    :root {
+      --bg-color: #080313;
+      --card-bg: rgba(18, 10, 36, 0.75);
+      --neon-pink: #ff007f;
+      --neon-cyan: #00f3ff;
+      --neon-yellow: #ffea00;
+      --neon-purple: #9d00ff;
+      --text-dim: #a49fc2;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, monospace;
+      color: #fff;
+    }
+
+    /* Fullscreen Animated Retro Sun & Grid Canvas */
+    #bgCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* UI Layer Overlay */
+    .ui-container {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2rem;
+      pointer-events: none;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    header {
+      text-align: center;
+      margin-top: 0.5rem;
+    }
+
+    h1 {
+      font-size: 2.8rem;
+      font-weight: 900;
+      letter-spacing: 0.35rem;
+      text-transform: uppercase;
+      color: #fff;
+      text-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan);
+    }
+
+    h1 span {
+      color: var(--neon-pink);
+      text-shadow: 0 0 10px var(--neon-pink), 0 0 20px var(--neon-pink), 0 0 40px var(--neon-pink);
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      letter-spacing: 0.4rem;
+      color: var(--neon-yellow);
+      margin-top: 0.3rem;
+      text-shadow: 0 0 8px rgba(255, 234, 0, 0.6);
+    }
+
+    /* Main Dashboard HUD */
+    .hud-panel {
+      background: var(--card-bg);
+      border: 1px solid rgba(0, 243, 255, 0.3);
+      box-shadow: 0 0 25px rgba(0, 243, 255, 0.15), inset 0 0 15px rgba(255, 0, 127, 0.1);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 850px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .hud-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .hud-card {
+      background: rgba(8, 3, 19, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .label {
+      font-size: 0.68rem;
+      letter-spacing: 0.15rem;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.05rem;
+    }
+
+    .neon-pink { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); }
+    .neon-cyan { color: var(--neon-cyan); text-shadow: 0 0 8px var(--neon-cyan); }
+    .neon-yellow { color: var(--neon-yellow); text-shadow: 0 0 8px var(--neon-yellow); }
+
+    .progress-wrapper {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 0.4rem;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+      box-shadow: 0 0 10px var(--neon-pink);
+      transition: width 0.2s linear;
+    }
+
+    .chords-card {
+      grid-column: span 4;
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.8rem 1.2rem;
+    }
+
+    .chords-value {
+      font-size: 1.1rem;
+      letter-spacing: 0.2rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    /* Audio Visualizer Canvas */
+    .visualizer-wrapper {
+      width: 100%;
+      height: 110px;
+      background: rgba(5, 2, 12, 0.8);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 0, 127, 0.2);
+      overflow: hidden;
+      position: relative;
+    }
+
+    #visualizerCanvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1.2rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-power {
+      background: linear-gradient(135deg, #120a24, #2a0845);
+      border: 2px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      padding: 1rem 2.5rem;
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 0.25rem;
+      border-radius: 40px;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.4), inset 0 0 10px rgba(0, 243, 255, 0.2);
+      transition: all 0.25s ease;
+      text-transform: uppercase;
+    }
+
+    .btn-power:hover {
+      background: var(--neon-cyan);
+      color: #000;
+      box-shadow: 0 0 30px rgba(0, 243, 255, 0.8);
+      transform: scale(1.03);
+    }
+
+    .btn-power.active {
+      border-color: var(--neon-pink);
+      color: var(--neon-pink);
+      box-shadow: 0 0 20px rgba(255, 0, 127, 0.6), inset 0 0 10px rgba(255, 0, 127, 0.3);
+    }
+
+    .btn-power.active:hover {
+      background: var(--neon-pink);
+      color: #fff;
+      box-shadow: 0 0 35px rgba(255, 0, 127, 0.9);
+    }
+
+    .btn-next {
+      border-color: var(--neon-pink);
+      color: var(--neon-pink);
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4), inset 0 0 10px rgba(255, 0, 127, 0.2);
+    }
+
+    .btn-next:hover {
+      background: var(--neon-pink);
+      color: #fff;
+      box-shadow: 0 0 30px rgba(255, 0, 127, 0.8);
+      transform: scale(1.03);
+    }
+
+    @media (max-width: 768px) {
+      .hud-grid { grid-template-columns: repeat(2, 1fr); }
+      .chords-card { grid-column: span 2; }
+      h1 { font-size: 1.8rem; }
+      .controls { gap: 0.8rem; }
+      .btn-power { padding: 0.8rem 1.8rem; font-size: 0.95rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Animated Synthwave Grid & Sun Background -->
+  <canvas id="bgCanvas"></canvas>
+
+  <!-- User Interface Layer -->
+  <div class="ui-container">
+    <header>
+      <h1>SYNTH<span>WAVE</span></h1>
+      <div class="subtitle">PROCEDURAL REAL-TIME ENGINE</div>
+    </header>
+
+    <div class="hud-panel interactive">
+      <div class="hud-grid">
+        <div class="hud-card">
+          <div class="label">NEXT TRACK IN</div>
+          <div id="timerDisplay" class="value neon-yellow">03:00</div>
+          <div class="progress-wrapper">
+            <div id="timerBar" class="progress-bar"></div>
+          </div>
+        </div>
+        <div class="hud-card">
+          <div class="label">SEED ID</div>
+          <div id="seedDisplay" class="value neon-cyan">----</div>
+        </div>
+        <div class="hud-card">
+          <div class="label">KEY & SCALE</div>
+          <div id="keyDisplay" class="value">--</div>
+        </div>
+        <div class="hud-card">
+          <div class="label">TEMPO</div>
+          <div id="bpmDisplay" class="value">-- BPM</div>
+        </div>
+        <div class="hud-card chords-card">
+          <div class="label">CHORD PROGRESSION</div>
+          <div id="chordDisplay" class="chords-value neon-pink">--</div>
+        </div>
+      </div>
+
+      <!-- Real-time Oscilloscope/Spectrum Visualizer -->
+      <div class="visualizer-wrapper">
+        <canvas id="visualizerCanvas"></canvas>
+      </div>
+    </div>
+
+    <div class="controls interactive">
+      <button id="startBtn" class="btn-power">INITIALIZE ENGINE</button>
+      <button id="nextBtn" class="btn-power btn-next">NEXT TRACK &#9197;</button>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       SYNTHWAVE PROCEDURAL MUSIC GENERATOR & AUDIO ENGINE
+       ========================================================================= */
+
+    // Musical Constants & Theory Data
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    
+    const SCALES = {
+      'Natural Minor':    [0, 2, 3, 5, 7, 8, 10],
+      'Dorian':           [0, 2, 3, 5, 7, 9, 10],
+      'Harmonic Minor':   [0, 2, 3, 5, 7, 8, 11],
+      'Minor Pentatonic': [0, 3, 5, 7, 10]
+    };
+
+    // Retrowave/Outrun Chord Progressions (Scale Degree Offsets)
+    const CHORD_PROGRESSIONS = [
+      { name: 'i - VI - III - VII',  degrees: [0, 5, 2, 6] },
+      { name: 'i - iv - v - VI',     degrees: [0, 3, 4, 5] },
+      { name: 'i - VI - iv - v',     degrees: [0, 5, 3, 4] },
+      { name: 'i - VII - VI - VII',  degrees: [0, 6, 5, 6] },
+      { name: 'i - III - VII - iv',  degrees: [0, 2, 6, 3] }
+    ];
+
+    const SEED_PREFIXES = ['CYBER', 'NEON', 'OUTRUN', 'VECTOR', 'GRID', 'LASER', 'CHROME', 'TURBO'];
+
+    // Helper: Convert MIDI note to Frequency
+    function midiToFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    // Class: Procedural Audio Engine
+    class SynthEngine {
+      constructor() {
+        this.ctx = null;
+        this.isPlaying = false;
+        
+        // Timing & Lookahead Scheduler
+        this.lookahead = 25.0; // ms
+        this.scheduleAheadTime = 0.1; // sec
+        this.nextNoteTime = 0.0;
+        this.currentStep = 0; // 0 to 63 (4 bars of 16th notes)
+        this.timerID = null;
+
+        // Master Graph Nodes
+        this.masterGain = null;
+        this.bassGain = null;
+        this.delayNode = null;
+        this.delayFeedback = null;
+        this.analyser = null;
+        this.noiseBuffer = null;
+
+        // Track Parameters
+        this.trackStartTime = 0;
+        this.trackDuration = 180; // 3 Minutes per track
+        this.pendingTrackSwitch = false;
+        this.activeTrack = null;
+      }
+
+      init() {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioCtx();
+
+        // Analyser for visualizer
+        this.analyser = this.ctx.createAnalyser();
+        this.analyser.fftSize = 256;
+
+        // Master Gain
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = 0.65;
+
+        // Bass Ducking Gain Node (Sidechain simulation)
+        this.bassGain = this.ctx.createGain();
+        this.bassGain.gain.value = 1.0;
+        this.bassGain.connect(this.masterGain);
+
+        // Delay Send Effect Loop
+        this.delayNode = this.ctx.createDelay();
+        this.delayFeedback = this.ctx.createGain();
+        const delayFilter = this.ctx.createBiquadFilter();
+
+        this.delayNode.delayTime.value = 0.375; // Initial delay time
+        this.delayFeedback.gain.value = 0.35;
+        delayFilter.type = 'lowpass';
+        delayFilter.frequency.value = 2200;
+
+        // Delay routing: delay -> feedback -> filter -> delay
+        this.delayNode.connect(this.delayFeedback);
+        this.delayFeedback.connect(delayFilter);
+        delayFilter.connect(this.delayNode);
+        this.delayNode.connect(this.masterGain);
+
+        // Final Routing
+        this.masterGain.connect(this.analyser);
+        this.analyser.connect(this.ctx.destination);
+
+        // Pre-generate White Noise Buffer (for Hats/Snares)
+        this.noiseBuffer = this.generateNoiseBuffer();
+
+        // Generate First Track Strategy
+        this.activeTrack = this.generateTrackMetaData();
+      }
+
+      generateNoiseBuffer() {
+        const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        return buffer;
+      }
+
+      generateTrackMetaData() {
+        // Random BPM between 102 and 118
+        const bpm = Math.floor(Math.random() * 17) + 102;
+        
+        // Random Key (MIDI roots 36 to 47 = C2 to B2)
+        const rootMidi = Math.floor(Math.random() * 12) + 36;
+        const keyName = NOTE_NAMES[rootMidi % 12];
+        
+        // Random Scale Mode
+        const scaleKeys = Object.keys(SCALES);
+        const scaleName = scaleKeys[Math.floor(Math.random() * scaleKeys.length)];
+        const scaleNotes = SCALES[scaleName];
+
+        // Random Progression
+        const progression = CHORD_PROGRESSIONS[Math.floor(Math.random() * CHORD_PROGRESSIONS.length)];
+
+        // Generate Seed Name
+        const prefix = SEED_PREFIXES[Math.floor(Math.random() * SEED_PREFIXES.length)];
+        const num = Math.floor(1000 + Math.random() * 9000);
+        const seedId = `${prefix}-${num}`;
+
+        // Generate Lead Melody Pattern (64 steps)
+        const leadPattern = new Array(64).fill(null);
+        const density = 0.45; // melody density
+        for (let i = 0; i < 64; i++) {
+          if (Math.random() < density && i % 2 === 0) { // align to syncopated 8th/16ths
+            const randomScaleIdx = Math.floor(Math.random() * scaleNotes.length);
+            const octaveOffset = Math.random() > 0.3 ? 24 : 36; // High octaves
+            leadPattern[i] = rootMidi + scaleNotes[randomScaleIdx] + octaveOffset;
+          }
+        }
+
+        // Generate Arpeggio Bass Style
+        const arpStyles = ['UP_DOWN', 'ROLLING', 'PUMPING'];
+        const arpStyle = arpStyles[Math.floor(Math.random() * arpStyles.length)];
+
+        return {
+          seedId,
+          bpm,
+          rootMidi,
+          keyName,
+          scaleName,
+          scaleNotes,
+          progression,
+          leadPattern,
+          arpStyle,
+          bassFilterCutoff: 180 + Math.random() * 150,
+          bassFilterEnv: 800 + Math.random() * 800
+        };
+      }
+
+      start() {
+        if (!this.ctx) this.init();
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+        
+        this.isPlaying = true;
+        this.currentStep = 0;
+        this.nextNoteTime = this.ctx.currentTime + 0.05;
+        this.trackStartTime = this.ctx.currentTime;
+        
+        // Set delay time according to BPM (dotted 8th note)
+        const secondsPerBeat = 60.0 / this.activeTrack.bpm;
+        this.delayNode.delayTime.setValueAtTime(secondsPerBeat * 0.75, this.ctx.currentTime);
+
+        this.scheduler();
+      }
+
+      stop() {
+        this.isPlaying = false;
+        clearTimeout(this.timerID);
+      }
+
+      scheduler() {
+        while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
+          this.scheduleStep(this.currentStep, this.nextNoteTime);
+          this.advanceStep();
+        }
+        if (this.isPlaying) {
+          this.timerID = setTimeout(() => this.scheduler(), this.lookahead);
+        }
+      }
+
+      advanceStep() {
+        const secondsPerBeat = 60.0 / this.activeTrack.bpm;
+        const secondsPer16th = secondsPerBeat / 4;
+        this.nextNoteTime += secondsPer16th;
+
+        this.currentStep = (this.currentStep + 1) % 64;
+
+        // Check if 3 minutes elapsed & transition at bar 1 (step 0)
+        const elapsed = this.ctx.currentTime - this.trackStartTime;
+        if (elapsed >= this.trackDuration) {
+          this.pendingTrackSwitch = true;
+        }
+
+        if (this.currentStep === 0 && this.pendingTrackSwitch) {
+          this.switchTrack();
+        }
+      }
+
+      switchTrack() {
+        this.pendingTrackSwitch = false;
+        this.activeTrack = this.generateTrackMetaData();
+        if (this.ctx) {
+          this.trackStartTime = this.ctx.currentTime;
+          // Update Delay tempo
+          const secondsPerBeat = 60.0 / this.activeTrack.bpm;
+          this.delayNode.delayTime.setValueAtTime(secondsPerBeat * 0.75, this.ctx.currentTime);
+        }
+
+        // Notify UI
+        if (window.onTrackChange) window.onTrackChange(this.activeTrack);
+      }
+
+      /* ---------------- AUDIO SYNTHESIS SOUND DESIGNS ---------------- */
+
+      // Kick Drum: Pitch-dropped Sine sweep
+      playKick(time) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(125, time);
+        osc.frequency.exponentialRampToValueAtTime(30, time + 0.08);
+
+        gain.gain.setValueAtTime(1.1, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.32);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+
+        osc.start(time);
+        osc.stop(time + 0.32);
+
+        // Sidechain Ducking Modulation on Bass
+        this.bassGain.gain.cancelScheduledValues(time);
+        this.bassGain.gain.setValueAtTime(0.12, time);
+        this.bassGain.gain.exponentialRampToValueAtTime(1.0, time + 0.22);
+      }
+
+      // Snare Drum: Tone + Gated Noise Burst
+      playSnare(time) {
+        // Tonal component
+        const osc = this.ctx.createOscillator();
+        const oscGain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(180, time);
+        osc.frequency.exponentialRampToValueAtTime(50, time + 0.07);
+
+        oscGain.gain.setValueAtTime(0.6, time);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, time + 0.08);
+
+        osc.connect(oscGain);
+        oscGain.connect(this.masterGain);
+
+        osc.start(time);
+        osc.stop(time + 0.08);
+
+        // High-pass Noise component
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 1100;
+
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.7, time);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(this.masterGain);
+
+        noise.start(time);
+        noise.stop(time + 0.18);
+      }
+
+      // Hi-Hats: Filtered noise
+      playHiHat(time, isOpen = false) {
+        const duration = isOpen ? 0.22 : 0.04;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 7500;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(isOpen ? 0.35 : 0.22, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+
+        noise.start(time);
+        noise.stop(time + duration);
+      }
+
+      // Arpeggiated Bassline
+      playBass(time, freq, duration) {
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        const gain = this.ctx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+
+        osc1.frequency.setValueAtTime(freq, time);
+        osc2.frequency.setValueAtTime(freq * 1.006, time); // Subtle detune
+
+        filter.type = 'lowpass';
+        filter.Q.value = 3.5;
+
+        const baseCutoff = this.activeTrack.bassFilterCutoff;
+        const envAmount = this.activeTrack.bassFilterEnv;
+
+        filter.frequency.setValueAtTime(baseCutoff + envAmount, time);
+        filter.frequency.exponentialRampToValueAtTime(baseCutoff, time + duration * 0.85);
+
+        gain.gain.setValueAtTime(0.6, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.bassGain); // Routes to sidechained node
+
+        osc1.start(time);
+        osc2.start(time);
+        osc1.stop(time + duration);
+        osc2.stop(time + duration);
+      }
+
+      // Warm Polyphonic Synth Pads
+      playPadChord(time, freqs, duration) {
+        freqs.forEach((freq) => {
+          const osc1 = this.ctx.createOscillator();
+          const osc2 = this.ctx.createOscillator();
+          const filter = this.ctx.createBiquadFilter();
+          const gain = this.ctx.createGain();
+
+          osc1.type = 'sawtooth';
+          osc2.type = 'sawtooth';
+
+          osc1.frequency.setValueAtTime(freq * 0.997, time);
+          osc2.frequency.setValueAtTime(freq * 1.003, time);
+
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(850, time);
+          filter.Q.value = 1.5;
+
+          // Attack/Release envelope
+          const attack = 0.3;
+          gain.gain.setValueAtTime(0.001, time);
+          gain.gain.linearRampToValueAtTime(0.08, time + attack);
+          gain.gain.setValueAtTime(0.08, time + duration - 0.3);
+          gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+          osc1.connect(filter);
+          osc2.connect(filter);
+          filter.connect(gain);
+
+          gain.connect(this.masterGain);
+          gain.connect(this.delayNode); // Send to Delay
+
+          osc1.start(time);
+          osc2.start(time);
+          osc1.stop(time + duration);
+          osc2.stop(time + duration);
+        });
+      }
+
+      // Detuned Supersaw Lead Synth
+      playLead(time, freq, duration) {
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+        const osc3 = this.ctx.createOscillator();
+        const filter = this.ctx.createBiquadFilter();
+        const gain = this.ctx.createGain();
+
+        osc1.type = 'sawtooth';
+        osc2.type = 'sawtooth';
+        osc3.type = 'square';
+
+        osc1.frequency.setValueAtTime(freq, time);
+        osc2.frequency.setValueAtTime(freq * 1.007, time);
+        osc3.frequency.setValueAtTime(freq * 0.993, time);
+
+        filter.type = 'lowpass';
+        filter.Q.value = 4.0;
+        filter.frequency.setValueAtTime(2200, time);
+        filter.frequency.exponentialRampToValueAtTime(900, time + duration);
+
+        gain.gain.setValueAtTime(0.001, time);
+        gain.gain.linearRampToValueAtTime(0.14, time + 0.02); // Snappy attack
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        osc3.connect(filter);
+        filter.connect(gain);
+
+        gain.connect(this.masterGain);
+        gain.connect(this.delayNode);
+
+        osc1.start(time);
+        osc2.start(time);
+        osc3.start(time);
+        osc1.stop(time + duration);
+        osc2.stop(time + duration);
+        osc3.stop(time + duration);
+      }
+
+      /* ---------------- STEP SEQUENCING & PATTERN LOGIC ---------------- */
+      scheduleStep(step, time) {
+        const bar = Math.floor(step / 16);
+        const stepInBar = step % 16;
+        const track = this.activeTrack;
+        const stepDuration = (60.0 / track.bpm) / 4;
+
+        // Identify active chord degree for current bar
+        const chordDegree = track.progression.degrees[bar];
+        const scale = track.scaleNotes;
+        
+        // Build Chord Triad + 7th Frequencies
+        const rootMidi = track.rootMidi;
+        const chordRootNote = rootMidi + scale[chordDegree % scale.length];
+        const chord3rd = rootMidi + scale[(chordDegree + 2) % scale.length] + (chordDegree + 2 >= scale.length ? 12 : 0);
+        const chord5th = rootMidi + scale[(chordDegree + 4) % scale.length] + (chordDegree + 4 >= scale.length ? 12 : 0);
+        const chord7th = rootMidi + scale[(chordDegree + 6) % scale.length] + (chordDegree + 6 >= scale.length ? 12 : 0);
+
+        const chordFreqs = [midiToFreq(chordRootNote), midiToFreq(chord3rd), midiToFreq(chord5th), midiToFreq(chord7th)];
+
+        // 1. DRUMS
+        // Four-on-the-floor Kick
+        if (stepInBar === 0 || stepInBar === 4 || stepInBar === 8 || stepInBar === 12) {
+          this.playKick(time);
+        }
+        // Gated Snare on 2 and 4
+        if (stepInBar === 4 || stepInBar === 12) {
+          this.playSnare(time);
+        }
+        // Hi-Hats (16th note drive)
+        if (stepInBar % 2 === 0) {
+          const isOpen = (stepInBar === 2 || stepInBar === 10);
+          this.playHiHat(time, isOpen);
+        } else if (Math.random() > 0.3) {
+          this.playHiHat(time, false);
+        }
+
+        // 2. BASSLINE (16th Note Arpeggiated Drive)
+        let bassNoteMidi = chordRootNote;
+        if (track.arpStyle === 'UP_DOWN') {
+          const arpOffsets = [0, 0, 12, 0, 7, 0, 12, 7];
+          bassNoteMidi += arpOffsets[stepInBar % 8];
+        } else if (track.arpStyle === 'ROLLING') {
+          const arpOffsets = [0, 7, 12, 7, 0, 7, 12, 14];
+          bassNoteMidi += arpOffsets[stepInBar % 8];
+        } else { // PUMPING
+          bassNoteMidi += (stepInBar % 2 === 1) ? 12 : 0;
+        }
+        this.playBass(time, midiToFreq(bassNoteMidi), stepDuration * 0.95);
+
+        // 3. SYNTH PADS (Triggered at start of each bar)
+        if (stepInBar === 0) {
+          this.playPadChord(time, chordFreqs, stepDuration * 15.5);
+        }
+
+        // 4. LEAD MELODY
+        const leadMidi = track.leadPattern[step];
+        if (leadMidi !== null) {
+          this.playLead(time, midiToFreq(leadMidi), stepDuration * 1.8);
+        }
+      }
+    }
+
+    /* =========================================================================
+       RETRO VISUALS & UI CONTROLLER
+       ========================================================================= */
+
+    const engine = new SynthEngine();
+
+    // DOM Elements
+    const startBtn = document.getElementById('startBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerBar = document.getElementById('timerBar');
+    const seedDisplay = document.getElementById('seedDisplay');
+    const keyDisplay = document.getElementById('keyDisplay');
+    const bpmDisplay = document.getElementById('bpmDisplay');
+    const chordDisplay = document.getElementById('chordDisplay');
+
+    // Canvas Contexts
+    const bgCanvas = document.getElementById('bgCanvas');
+    const bgCtx = bgCanvas.getContext('2d');
+
+    const visCanvas = document.getElementById('visualizerCanvas');
+    const visCtx = visCanvas.getContext('2d');
+
+    let gridOffset = 0;
+
+    function resizeCanvases() {
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+      visCanvas.width = visCanvas.parentElement.clientWidth;
+      visCanvas.height = visCanvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvases);
+    resizeCanvases();
+
+    // Update Dashboard UI
+    function updateHUD(track) {
+      seedDisplay.innerText = track.seedId;
+      keyDisplay.innerText = `${track.keyName} ${track.scaleName}`;
+      bpmDisplay.innerText = `${track.bpm} BPM`;
+      chordDisplay.innerText = track.progression.name;
+    }
+
+    window.onTrackChange = (newTrack) => {
+      updateHUD(newTrack);
+    };
+
+    // Toggle Audio Engine
+    startBtn.addEventListener('click', () => {
+      if (!engine.isPlaying) {
+        engine.start();
+        updateHUD(engine.activeTrack);
+        startBtn.innerText = 'PAUSE ENGINE';
+        startBtn.classList.add('active');
+      } else {
+        engine.stop();
+        startBtn.innerText = 'RESUME ENGINE';
+        startBtn.classList.remove('active');
+      }
+    });
+
+    // Advance to Next Track Button
+    nextBtn.addEventListener('click', () => {
+      if (!engine.ctx) engine.init();
+      engine.switchTrack();
+      updateHUD(engine.activeTrack);
+    });
+
+    /* ---------------- RETRO CANVAS DRAWING LOOPS ---------------- */
+
+    function drawBackground() {
+      const w = bgCanvas.width;
+      const h = bgCanvas.height;
+
+      // Dark Gradient Sky
+      const skyGrad = bgCtx.createLinearGradient(0, 0, 0, h);
+      skyGrad.addColorStop(0, '#04010a');
+      skyGrad.addColorStop(0.5, '#15062b');
+      skyGrad.addColorStop(1, '#080313');
+      bgCtx.fillStyle = skyGrad;
+      bgCtx.fillRect(0, 0, w, h);
+
+      const horizonY = h * 0.55;
+
+      // Draw Retro Neon Sun
+      const sunRadius = Math.min(w, h) * 0.18;
+      const sunX = w / 2;
+      const sunY = horizonY - sunRadius * 0.2;
+
+      const sunGrad = bgCtx.createLinearGradient(0, sunY - sunRadius, 0, sunY + sunRadius);
+      sunGrad.addColorStop(0, '#ffea00');
+      sunGrad.addColorStop(0.5, '#ff007f');
+      sunGrad.addColorStop(1, '#9d00ff');
+
+      bgCtx.save();
+      bgCtx.beginPath();
+      bgCtx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
+      bgCtx.fillStyle = sunGrad;
+      bgCtx.shadowColor = '#ff007f';
+      bgCtx.shadowBlur = 40;
+      bgCtx.fill();
+      bgCtx.restore();
+
+      // Sun Cutout Lines
+      bgCtx.fillStyle = '#15062b';
+      for (let i = 0; i < 8; i++) {
+        const lineH = 2 + i * 1.5;
+        const lineY = sunY + (i * 11) - 10;
+        if (lineY > sunY - sunRadius && lineY < sunY + sunRadius) {
+          bgCtx.fillRect(sunX - sunRadius, lineY, sunRadius * 2, lineH);
+        }
+      }
+
+      // Draw Perspective Grid Floor
+      bgCtx.save();
+      bgCtx.beginPath();
+      bgCtx.rect(0, horizonY, w, h - horizonY);
+      bgCtx.clip();
+
+      // Grid Floor Background
+      const gridBg = bgCtx.createLinearGradient(0, horizonY, 0, h);
+      gridBg.addColorStop(0, '#10002b');
+      gridBg.addColorStop(1, '#000000');
+      bgCtx.fillStyle = gridBg;
+      bgCtx.fillRect(0, horizonY, w, h - horizonY);
+
+      // Grid Perspective Lines
+      bgCtx.strokeStyle = 'rgba(0, 243, 255, 0.35)';
+      bgCtx.lineWidth = 1.5;
+      bgCtx.shadowColor = '#00f3ff';
+      bgCtx.shadowBlur = 6;
+
+      const fov = 300;
+      const speed = engine.isPlaying ? (engine.activeTrack.bpm / 110) * 2.5 : 0.5;
+      gridOffset = (gridOffset + speed) % 40;
+
+      // Horizontal moving lines
+      for (let z = 10; z < 600; z += 40) {
+        const currentZ = z - gridOffset;
+        if (currentZ <= 0) continue;
+        const y = horizonY + (fov / currentZ) * 40;
+        bgCtx.beginPath();
+        bgCtx.moveTo(0, y);
+        bgCtx.lineTo(w, y);
+        bgCtx.stroke();
+      }
+
+      // Perspective Vertical Lines
+      const numLines = 32;
+      for (let i = -numLines; i <= numLines; i++) {
+        const x1 = w / 2 + i * 15;
+        const x2 = w / 2 + i * 180;
+        bgCtx.beginPath();
+        bgCtx.moveTo(x1, horizonY);
+        bgCtx.lineTo(x2, h);
+        bgCtx.stroke();
+      }
+
+      bgCtx.restore();
+
+      // Horizon Glow Line
+      bgCtx.save();
+      bgCtx.strokeStyle = '#ff007f';
+      bgCtx.lineWidth = 3;
+      bgCtx.shadowColor = '#ff007f';
+      bgCtx.shadowBlur = 15;
+      bgCtx.beginPath();
+      bgCtx.moveTo(0, horizonY);
+      bgCtx.lineTo(w, horizonY);
+      bgCtx.stroke();
+      bgCtx.restore();
+    }
+
+    function drawVisualizer() {
+      const vw = visCanvas.width;
+      const vh = visCanvas.height;
+
+      visCtx.clearRect(0, 0, vw, vh);
+
+      if (!engine.analyser || !engine.isPlaying) {
+        // Static Idle Line
+        visCtx.strokeStyle = 'rgba(0, 243, 255, 0.3)';
+        visCtx.lineWidth = 2;
+        visCtx.beginPath();
+        visCtx.moveTo(0, vh / 2);
+        visCtx.lineTo(vw, vh / 2);
+        visCtx.stroke();
+        return;
+      }
+
+      // Frequency Spectrum Bars
+      const bufferLength = engine.analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      engine.analyser.getByteFrequencyData(dataArray);
+
+      const barWidth = (vw / bufferLength) * 2.2;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * vh;
+
+        const grad = visCtx.createLinearGradient(0, vh, 0, vh - barHeight);
+        grad.addColorStop(0, '#00f3ff');
+        grad.addColorStop(0.6, '#ff007f');
+        grad.addColorStop(1, '#ffea00');
+
+        visCtx.fillStyle = grad;
+        visCtx.fillRect(x, vh - barHeight, barWidth - 1, barHeight);
+
+        x += barWidth;
+      }
+    }
+
+    // Main Render Loop
+    function renderLoop() {
+      drawBackground();
+      drawVisualizer();
+
+      // Update 3-Minute Countdown HUD
+      if (engine.isPlaying && engine.ctx) {
+        const elapsed = engine.ctx.currentTime - engine.trackStartTime;
+        const remaining = Math.max(0, engine.trackDuration - elapsed);
+
+        const mins = Math.floor(remaining / 60);
+        const secs = Math.floor(remaining % 60);
+        timerDisplay.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        const progressPct = (remaining / engine.trackDuration) * 100;
+        timerBar.style.width = `${progressPct}%`;
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    renderLoop();
+  </script>
+</body>
+</html>
