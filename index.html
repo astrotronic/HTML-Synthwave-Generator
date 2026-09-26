@@ -102,21 +102,23 @@
     }
 
     .hud-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1rem;
+      display: flex;
+      justify-content: center;
+      width: 100%;
     }
 
     .hud-card {
       background: rgba(8, 3, 19, 0.6);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      padding: 0.8rem;
+      padding: 0.8rem 1.5rem;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
+      width: 100%;
+      max-width: 320px;
     }
 
     .label {
@@ -152,22 +154,6 @@
       background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
       box-shadow: 0 0 10px var(--neon-pink);
       transition: width 0.2s linear;
-    }
-
-    .chords-card {
-      grid-column: span 4;
-      display: flex;
-      flex-direction: row;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.8rem 1.2rem;
-    }
-
-    .chords-value {
-      font-size: 1.1rem;
-      letter-spacing: 0.2rem;
-      font-weight: 700;
-      color: #fff;
     }
 
     /* Audio Visualizer Canvas */
@@ -244,8 +230,6 @@
     }
 
     @media (max-width: 768px) {
-      .hud-grid { grid-template-columns: repeat(2, 1fr); }
-      .chords-card { grid-column: span 2; }
       h1 { font-size: 1.8rem; }
       .controls { gap: 0.8rem; }
       .btn-power { padding: 0.8rem 1.8rem; font-size: 0.95rem; }
@@ -272,22 +256,6 @@
           <div class="progress-wrapper">
             <div id="timerBar" class="progress-bar"></div>
           </div>
-        </div>
-        <div class="hud-card">
-          <div class="label">SEED ID</div>
-          <div id="seedDisplay" class="value neon-cyan">----</div>
-        </div>
-        <div class="hud-card">
-          <div class="label">KEY & SCALE</div>
-          <div id="keyDisplay" class="value">--</div>
-        </div>
-        <div class="hud-card">
-          <div class="label">TEMPO</div>
-          <div id="bpmDisplay" class="value">-- BPM</div>
-        </div>
-        <div class="hud-card chords-card">
-          <div class="label">CHORD PROGRESSION</div>
-          <div id="chordDisplay" class="chords-value neon-pink">--</div>
         </div>
       </div>
 
@@ -344,7 +312,8 @@
         this.lookahead = 25.0; // ms
         this.scheduleAheadTime = 0.1; // sec
         this.nextNoteTime = 0.0;
-        this.currentStep = 0; // 0 to 63 (4 bars of 16th notes)
+        this.currentStep = 0; // 0 to 63 (4 bars of 16th notes per progression)
+        this.progressionLoopCount = 0; // Total progression loops played in active track
         this.timerID = null;
 
         // Master Graph Nodes
@@ -429,8 +398,18 @@
         const scaleName = scaleKeys[Math.floor(Math.random() * scaleKeys.length)];
         const scaleNotes = SCALES[scaleName];
 
-        // Random Progression
-        const progression = CHORD_PROGRESSIONS[Math.floor(Math.random() * CHORD_PROGRESSIONS.length)];
+        // Select Primary Progression (Part A)
+        const p1Index = Math.floor(Math.random() * CHORD_PROGRESSIONS.length);
+        const progression1 = CHORD_PROGRESSIONS[p1Index];
+
+        // Select Secondary Harmonious Progression (Part B) in same Key & Scale
+        let p2Index = Math.floor(Math.random() * CHORD_PROGRESSIONS.length);
+        if (CHORD_PROGRESSIONS.length > 1) {
+          while (p2Index === p1Index) {
+            p2Index = Math.floor(Math.random() * CHORD_PROGRESSIONS.length);
+          }
+        }
+        const progression2 = CHORD_PROGRESSIONS[p2Index];
 
         // Generate Seed Name
         const prefix = SEED_PREFIXES[Math.floor(Math.random() * SEED_PREFIXES.length)];
@@ -459,7 +438,8 @@
           keyName,
           scaleName,
           scaleNotes,
-          progression,
+          progression1,
+          progression2,
           leadPattern,
           arpStyle,
           bassFilterCutoff: 180 + Math.random() * 150,
@@ -475,6 +455,7 @@
         
         this.isPlaying = true;
         this.currentStep = 0;
+        this.progressionLoopCount = 0;
         this.nextNoteTime = this.ctx.currentTime + 0.05;
         this.trackStartTime = this.ctx.currentTime;
         
@@ -507,6 +488,11 @@
 
         this.currentStep = (this.currentStep + 1) % 64;
 
+        // When step wraps back to 0, increment total progression loop counter
+        if (this.currentStep === 0) {
+          this.progressionLoopCount++;
+        }
+
         // Check if 3 minutes elapsed & transition at bar 1 (step 0)
         const elapsed = this.ctx.currentTime - this.trackStartTime;
         if (elapsed >= this.trackDuration) {
@@ -521,6 +507,9 @@
       switchTrack() {
         this.pendingTrackSwitch = false;
         this.activeTrack = this.generateTrackMetaData();
+        this.currentStep = 0;
+        this.progressionLoopCount = 0;
+
         if (this.ctx) {
           this.trackStartTime = this.ctx.currentTime;
           // Update Delay tempo
@@ -741,8 +730,13 @@
         const track = this.activeTrack;
         const stepDuration = (60.0 / track.bpm) / 4;
 
+        // Repeat Pattern Logic: 4x Progression 1 -> 2x Progression 2 -> Repeat
+        const patternCycle = this.progressionLoopCount % 6; // 0, 1, 2, 3 = Prog 1 (Part A) | 4, 5 = Prog 2 (Part B)
+        const isPartB = (patternCycle >= 4);
+        const activeProgression = !isPartB ? track.progression1 : track.progression2;
+
         // Identify active chord degree for current bar
-        const chordDegree = track.progression.degrees[bar];
+        const chordDegree = activeProgression.degrees[bar];
         const scale = track.scaleNotes;
         
         // Build Chord Triad + 7th Frequencies
@@ -755,20 +749,46 @@
         const chordFreqs = [midiToFreq(chordRootNote), midiToFreq(chord3rd), midiToFreq(chord5th), midiToFreq(chord7th)];
 
         // 1. DRUMS
-        // Four-on-the-floor Kick
-        if (stepInBar === 0 || stepInBar === 4 || stepInBar === 8 || stepInBar === 12) {
-          this.playKick(time);
-        }
-        // Gated Snare on 2 and 4
-        if (stepInBar === 4 || stepInBar === 12) {
-          this.playSnare(time);
-        }
-        // Hi-Hats (16th note drive)
-        if (stepInBar % 2 === 0) {
-          const isOpen = (stepInBar === 2 || stepInBar === 10);
-          this.playHiHat(time, isOpen);
-        } else if (Math.random() > 0.3) {
-          this.playHiHat(time, false);
+        if (!isPartB) {
+          // --- PART A DRUM PATTERN: Classic 4-on-the-floor Retrowave ---
+          if (stepInBar === 0 || stepInBar === 4 || stepInBar === 8 || stepInBar === 12) {
+            this.playKick(time);
+          }
+          if (stepInBar === 4 || stepInBar === 12) {
+            this.playSnare(time);
+          }
+          if (stepInBar % 2 === 0) {
+            const isOpen = (stepInBar === 2 || stepInBar === 10);
+            this.playHiHat(time, isOpen);
+          } else if (Math.random() > 0.3) {
+            this.playHiHat(time, false);
+          }
+        } else {
+          // --- PART B DRUM PATTERN: High-Energy Syncopated Groove & Drum Fill ---
+          // Driving Syncopated Kick (0, 3, 6, 8, 11, 14)
+          if (stepInBar === 0 || stepInBar === 3 || stepInBar === 6 || stepInBar === 8 || stepInBar === 11 || stepInBar === 14) {
+            this.playKick(time);
+          }
+
+          // Snare Pattern & Drum Fill Roll at end of Part B (Bar 4 of Part B loop)
+          if (patternCycle === 5 && bar === 3 && stepInBar >= 8) {
+            // Drum Fill Roll leading smoothly back into Part A!
+            if (stepInBar % 2 === 0 || stepInBar >= 13) {
+              this.playSnare(time);
+            }
+          } else {
+            // Standard Part B Syncopated Snare Accents
+            if (stepInBar === 4 || stepInBar === 10 || stepInBar === 12) {
+              this.playSnare(time);
+            }
+          }
+
+          // Driving Offbeat Open Hi-Hats
+          if (stepInBar % 2 === 1) {
+            this.playHiHat(time, true);
+          } else {
+            this.playHiHat(time, false);
+          }
         }
 
         // 2. BASSLINE (16th Note Arpeggiated Drive)
@@ -808,10 +828,6 @@
     const nextBtn = document.getElementById('nextBtn');
     const timerDisplay = document.getElementById('timerDisplay');
     const timerBar = document.getElementById('timerBar');
-    const seedDisplay = document.getElementById('seedDisplay');
-    const keyDisplay = document.getElementById('keyDisplay');
-    const bpmDisplay = document.getElementById('bpmDisplay');
-    const chordDisplay = document.getElementById('chordDisplay');
 
     // Canvas Contexts
     const bgCanvas = document.getElementById('bgCanvas');
@@ -831,23 +847,14 @@
     window.addEventListener('resize', resizeCanvases);
     resizeCanvases();
 
-    // Update Dashboard UI
-    function updateHUD(track) {
-      seedDisplay.innerText = track.seedId;
-      keyDisplay.innerText = `${track.keyName} ${track.scaleName}`;
-      bpmDisplay.innerText = `${track.bpm} BPM`;
-      chordDisplay.innerText = track.progression.name;
-    }
-
     window.onTrackChange = (newTrack) => {
-      updateHUD(newTrack);
+      // Event handler ready for potential future visual hooks
     };
 
     // Toggle Audio Engine
     startBtn.addEventListener('click', () => {
       if (!engine.isPlaying) {
         engine.start();
-        updateHUD(engine.activeTrack);
         startBtn.innerText = 'PAUSE ENGINE';
         startBtn.classList.add('active');
       } else {
@@ -861,7 +868,6 @@
     nextBtn.addEventListener('click', () => {
       if (!engine.ctx) engine.init();
       engine.switchTrack();
-      updateHUD(engine.activeTrack);
     });
 
     /* ---------------- RETRO CANVAS DRAWING LOOPS ---------------- */
@@ -1015,7 +1021,7 @@
       drawVisualizer();
 
       // Update 3-Minute Countdown HUD
-      if (engine.isPlaying && engine.ctx) {
+      if (engine.isPlaying && engine.ctx && engine.activeTrack) {
         const elapsed = engine.ctx.currentTime - engine.trackStartTime;
         const remaining = Math.max(0, engine.trackDuration - elapsed);
 
